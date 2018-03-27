@@ -4,7 +4,7 @@
 #include <SPI.h>
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; 
-char timeServer[] = "au.pool.ntp.org";
+char timeServer[] = "0.au.pool.ntp.org";
 const int timeZone = 11;     // Sydney
 EthernetUDP Udp;
 unsigned int localPort = 8888;  // local port to listen for UDP packets
@@ -50,23 +50,72 @@ time_t getNtpTime()
         Serial.println("Receive NTP Response");
         Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
         unsigned long secsSince1900;
+        unsigned long ReferenceTimeStamp; 
+        unsigned long OriginateTimeStamp;  
+        unsigned long ReceiveTimeStamp;  
+        unsigned long ReceiveTimeStampFrac;  
+        unsigned long TransmitTimeStampFrac;  
+        float ReceiveTimeStampFracFloat;  
+        float TransmitTimeStampFracFloat;  
+        float TimeServerThought; 
+        
         Serial.print("Size:- "); Serial.println(size);
         int i;
         for (i = 0; i <= 47; i= i + 1) 
              {
-                Serial.print(packetBuffer[i]);
+                Serial.print(packetBuffer[i]);Serial.print(".");
              }
         Serial.println(" ");
         for (i = 40; i <= 47; i= i + 1) 
              {
-                Serial.print(packetBuffer[i]);
+                Serial.print(packetBuffer[i]);Serial.print(".");
              }
         Serial.println(" ");
+
+                  String IP = "";
+                   IP = (unsigned long)packetBuffer[12]; IP +=".";
+                   IP += (unsigned long)packetBuffer[13];IP +=".";
+                   IP += (unsigned long)packetBuffer[14];IP +=".";
+                   IP += (unsigned long)packetBuffer[15];
+                  Serial.print("Reference IP: ");Serial.println(IP);
+
+                  
+                  ReferenceTimeStamp =  (unsigned long)packetBuffer[16] << 24;
+                  ReferenceTimeStamp |= (unsigned long)packetBuffer[17] << 16;
+                  ReferenceTimeStamp |= (unsigned long)packetBuffer[18] << 8;
+                  ReferenceTimeStamp |= (unsigned long)packetBuffer[19];
+                  Serial.print("Reference Time Stamp: ");Serial.println(ReferenceTimeStamp);
+             
+                  ReceiveTimeStamp =  (unsigned long)packetBuffer[32] << 24;
+                  ReceiveTimeStamp |= (unsigned long)packetBuffer[33] << 16;
+                  ReceiveTimeStamp |= (unsigned long)packetBuffer[34] << 8;
+                  ReceiveTimeStamp |= (unsigned long)packetBuffer[35];
+                  Serial.print("Receive Time Stamp: ");Serial.println(ReceiveTimeStamp);
+
+                  ReceiveTimeStampFrac =  (unsigned long)packetBuffer[36] << 24;
+                  ReceiveTimeStampFrac |= (unsigned long)packetBuffer[37] << 16;
+                  ReceiveTimeStampFrac |= (unsigned long)packetBuffer[38] << 8;
+                  ReceiveTimeStampFrac |= (unsigned long)packetBuffer[39];
+                  ReceiveTimeStampFracFloat = (ReceiveTimeStampFrac / 4294967296.0);
+                  Serial.print("Receive Time Stamp Frac: ");Serial.println(ReceiveTimeStampFracFloat,6);
+
+
         // convert four bytes starting at location 40 to a long integer
         secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
         secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
         secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
         secsSince1900 |= (unsigned long)packetBuffer[43];
+        Serial.print("Transmit Time Stamp: ");Serial.println(secsSince1900);
+        
+                  TransmitTimeStampFrac =  (unsigned long)packetBuffer[40] << 24;
+                  TransmitTimeStampFrac |= (unsigned long)packetBuffer[41] << 16;
+                  TransmitTimeStampFrac |= (unsigned long)packetBuffer[42] << 8;
+                  TransmitTimeStampFrac |= (unsigned long)packetBuffer[43];
+                  TransmitTimeStampFracFloat = (TransmitTimeStampFrac / 4294967296.0);
+                  Serial.print("Transmit Time Stamp Frac: ");Serial.println(TransmitTimeStampFracFloat,6);
+                  TimeServerThought = TransmitTimeStampFracFloat - ReceiveTimeStampFracFloat;
+                  Serial.print("Time Server Thought: ");Serial.println(TimeServerThought,6);
+                  
         return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
       }
   }
@@ -118,7 +167,6 @@ void loop()
         }
     }
 }
-
 
 
 
