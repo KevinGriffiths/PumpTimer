@@ -1,6 +1,7 @@
 /*
   Pool Pump Timer with Internet Time
   Reads time from Internet using NTP
+  14/4/18
 */
 #include <TimeLib.h>
 #include <Ethernet.h>
