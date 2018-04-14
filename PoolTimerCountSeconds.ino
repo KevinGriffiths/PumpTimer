@@ -1,7 +1,6 @@
 /*
   Pool Pump Timer with Internet Time
   Reads time from Internet using NTP
-  14/4/18
 */
 #include <TimeLib.h>
 #include <Ethernet.h>
@@ -21,14 +20,10 @@ String GetRequest;
 unsigned int localPort = 8888;  // local port to listen for UDP packets
 time_t prevDisplay = 0; // when the digital clock was displayed
 time_t t;
-long lastMillis = 0;
-long loops = 0;
-String PumpStatus = "Pump Off";
-String TimeStatus = "Off";
-int Hour;
-int Minute;
-unsigned long SecondsRunning;
-unsigned long prevMillis;
+long lastMillis = 0, loops = 0;
+String PumpStatus = "Pump Off", TimeStatus = "Off";
+int Hour, Minute, prevMin, MinuteAdd, MinutesRunning;
+unsigned long SecondsRunning, prevMillis;
 
 
 void LogInDatabase(String TextToWrite)
@@ -112,11 +107,13 @@ void TurnOnPump()
   if (PumpStatus == "Pump Off")
     {
       digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
-      digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW);
+     // digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW);
       PumpStatus = "Pump Running";
       Serial.println("ON signal sent");
       LogInDatabase("Pump%20Turned%20On");
       prevMillis = millis();
+      prevMin = Minute;
+      
     } 
   else
     {
@@ -124,6 +121,14 @@ void TurnOnPump()
         {
           SecondsRunning++;
           prevMillis += 1000; 
+        }
+      if (Minute!=prevMin)
+        {
+          MinuteAdd = Minute - prevMin;
+          if (MinuteAdd < 0)  {MinuteAdd=MinuteAdd+60;}
+          MinutesRunning=MinutesRunning+MinuteAdd;
+          Serial.println("Been running for:- "); Serial.println(MinutesRunning);
+          prevMin = Minute;
         }
     }
 }
@@ -143,6 +148,10 @@ void TurnOffPump()
          sprintf(mystr,"Ran_for_sec:%lu",SecondsRunning); //l=long u=unsigned
          Serial.println(mystr);
     LogInDatabase(mystr);
+         //char mystr1[40];
+         sprintf(mystr,"Ran_for_min:%d",MinutesRunning); //d=integer     (%ld for long integer)
+         Serial.println(mystr);
+    LogInDatabase(mystr);    
   } 
 }
 
@@ -171,7 +180,6 @@ void loop ()
     Minute = minute(t);
     //Serial.println("Run time so far:- ");
     //Serial.println(SecondsRunning);
-    
     
     if (Hour >= 22 && Hour <= 24)   // After 10pm 
       {
@@ -213,11 +221,5 @@ void loop ()
       {
         TurnOffPump();
       }
-
-    
 }
-
-
-
-
 
