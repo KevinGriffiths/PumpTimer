@@ -1,6 +1,7 @@
 /*
   Pool Pump Timer with Internet Time
   Reads time from Internet using NTP
+  14/4/18
 */
 #include <TimeLib.h>
 #include <Ethernet.h>
@@ -107,7 +108,7 @@ void TurnOnPump()
   if (PumpStatus == "Pump Off")
     {
       digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
-     // digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW);
+      digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW);
       PumpStatus = "Pump Running";
       Serial.println("ON signal sent");
       LogInDatabase("Pump%20Turned%20On");
@@ -222,4 +223,7 @@ void loop ()
         TurnOffPump();
       }
 }
+
+
+
 
