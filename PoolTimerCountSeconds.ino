@@ -10,7 +10,8 @@
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; 
 byte ip[] { 192, 168, 0, 21 };
-char timeServer[] = "0.au.pool.ntp.org";
+//char timeServer[] = "0.au.pool.ntp.org";
+char timeServer[] = "192.168.0.1";
 char site[] = "arduino.newcastleit.com.au"; 
 const int timeZone = 10;     // Sydney
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
@@ -20,7 +21,7 @@ EthernetServer server(80);
 String GetRequest;
 unsigned int localPort = 8888;  // local port to listen for UDP packets
 time_t prevDisplay = 0; // when the digital clock was displayed
-time_t t;
+time_t t, start_t, stop_t, run_t;
 long lastMillis = 0, loops = 0;
 String PumpStatus = "Pump Off", TimeStatus = "Off";
 int Hour, Minute, prevMin, MinuteAdd, MinutesRunning;
@@ -29,43 +30,30 @@ unsigned long SecondsRunning, prevMillis;
 
 void LogInDatabase(String TextToWrite)
 {
+  TextToWrite.replace(" ","%20");
   GetRequest = "GET /collect_pool.php?Text=";GetRequest +=TextToWrite; GetRequest += " HTTP/1.0";
-  Serial.println("writing to log");
-
   EthernetClient NS3;
- // NS3.setTimeout(1500);
   if (NS3.connect(site, 80)) 
       {
-           Serial.println("connected");
-           Serial.println(GetRequest);
-           NS3.println(GetRequest); 
+           Serial.println("connected"); NS3.println(GetRequest); 
            NS3.println("Host: arduino.newcastleit.com.au"); NS3.println("Referer: Pool Timer ");
            NS3.println("User-Agent: Arduino Mt Hutton Pool Timer");NS3.println("Connection: close\r\n");
-           Serial.println("Connection Closed");
-           NS3.stop();
+           Serial.println("Connection Closed");  NS3.stop();
       }
 }      
                               
 // send an NTP request to the time server at the given address
 void sendNTPpacket(char* address)
 {
-  memset(packetBuffer, 0, NTP_PACKET_SIZE);  // set all bytes in the buffer to 0
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
-  Udp.beginPacket(address, 123); //NTP requests are to port 123
-  Udp.write(packetBuffer, NTP_PACKET_SIZE);
-  Udp.endPacket();
+  memset(packetBuffer, 0, NTP_PACKET_SIZE); 
+  packetBuffer[0] = 0b11100011; packetBuffer[1] = 0; packetBuffer[2] = 6; packetBuffer[3] = 0xEC; 
+  packetBuffer[12]  = 49; packetBuffer[13]  = 0x4E; packetBuffer[14]  = 49; packetBuffer[15]  = 52;
+  Udp.beginPacket(address, 123); Udp.write(packetBuffer, NTP_PACKET_SIZE); Udp.endPacket();
 }
 
 time_t getNtpTime()
 {
-  while (Udp.parsePacket() > 0) ; // discard any previously received packets
+  while (Udp.parsePacket() > 0) ; 
   Serial.println("Transmit NTP Request");
   sendNTPpacket(timeServer);
   uint32_t beginWait = millis();
@@ -75,7 +63,7 @@ time_t getNtpTime()
       if (size >= NTP_PACKET_SIZE) 
         {
           Serial.println("Receive NTP Response");
-          LogInDatabase("Time%20updated%20NTP%20Data%20Received");
+          //LogInDatabase("Time%20updated%20NTP%20Data%20Received");
           Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
           unsigned long secsSince1900;
           secsSince1900 =  (unsigned long)packetBuffer[40] << 24; secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
@@ -101,36 +89,32 @@ void printDigits(int digits)
   Serial.print(digits);
 }
 
+void writeTtoLog()
+{
+   char mystr[40];
+   sprintf(mystr,"T:%lu",t); //l=long u=unsigned
+   Serial.println(mystr);
+   LogInDatabase(mystr);  
+}
 
 void TurnOnPump()
 {
  // Serial.println("ON requested");
   if (PumpStatus == "Pump Off")
     {
+      start_t = t;
       digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on 
       digitalWrite(2, HIGH); delay(500); digitalWrite(2, LOW);
       PumpStatus = "Pump Running";
       Serial.println("ON signal sent");
-      LogInDatabase("Pump%20Turned%20On");
-      prevMillis = millis();
-      prevMin = Minute;
-      
+          char mystr[40];
+          sprintf(mystr,"Pump Turned On: %lu",start_t); //l=long u=unsigned
+          Serial.println(mystr);
+          LogInDatabase(mystr);
     } 
   else
     {
-      while (millis() - prevMillis >= 1000) 
-        {
-          SecondsRunning++;
-          prevMillis += 1000; 
-        }
-      if (Minute!=prevMin)
-        {
-          MinuteAdd = Minute - prevMin;
-          if (MinuteAdd < 0)  {MinuteAdd=MinuteAdd+60;}
-          MinutesRunning=MinutesRunning+MinuteAdd;
-          Serial.println("Been running for:- "); Serial.println(MinutesRunning);
-          prevMin = Minute;
-        }
+      //pump already on
     }
 }
 
@@ -144,15 +128,16 @@ void TurnOffPump()
     digitalWrite(3, HIGH); delay(500); digitalWrite(3, LOW);
     PumpStatus = "Pump Off";
     Serial.println("OFF signal sent");
-    LogInDatabase("Pump%20Turned%20Off");
-         char mystr[40];
-         sprintf(mystr,"Ran_for_sec:%lu",SecondsRunning); //l=long u=unsigned
-         Serial.println(mystr);
-    LogInDatabase(mystr);
-         //char mystr1[40];
-         sprintf(mystr,"Ran_for_min:%d",MinutesRunning); //d=integer     (%ld for long integer)
-         Serial.println(mystr);
-    LogInDatabase(mystr);    
+    stop_t = t;
+    run_t = stop_t - start_t;
+          char mystr[40];
+          sprintf(mystr,"Pump Turned Off: %lu",stop_t); //l=long u=unsigned
+          Serial.println(mystr);
+          LogInDatabase(mystr);
+          sprintf(mystr,"Ran for %lu seconds",run_t); //l=long u=unsigned
+          Serial.println(mystr);
+          LogInDatabase(mystr);
+          
   } 
 }
 
@@ -167,7 +152,8 @@ void setup ()
   Udp.begin(localPort);  server.begin();
   Serial.println("waiting for sync");
   setSyncProvider(getNtpTime);
-  setSyncInterval(3600); // Check NTP Time server every hour
+  //setSyncInterval(3600); // Check NTP Time server every hour
+  setSyncInterval(300); // 5 min
   LogInDatabase("Startup");
 }
 
@@ -179,8 +165,7 @@ void loop ()
     t = now();
     Hour = hour(t);
     Minute = minute(t);
-    //Serial.println("Run time so far:- ");
-    //Serial.println(SecondsRunning);
+    //Serial.print("Run time so far:- "); Serial.println(SecondsRunning);
     
     if (Hour >= 22 && Hour <= 24)   // After 10pm 
       {
@@ -217,13 +202,9 @@ void loop ()
         TimeStatus = "On";
         TurnOnPump();
       }
-            
+                           
     if (TimeStatus == "Off")  //All other times  -  mostly the day ....
       {
         TurnOffPump();
       }
 }
-
-
-
-
